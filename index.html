@@ -1,0 +1,96 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <title>LibreFit: Workout Tracker</title>
+
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+        <link rel="stylesheet" href="style.css" />
+
+        <script type="importmap">
+        {
+            "imports": {
+            "@material/web/": "https://esm.run/@material/web/"
+            }
+        }
+        </script>
+        <script type="module">
+            import '@material/web/all.js';
+            import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+
+            document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+        </script>
+    </head>
+
+    <body class="dark">
+        <div id="wrapper">
+            <!-- Header -->
+            <header id="header" class="alt">
+                <span class="logo"><img src="images/logo.svg" width="300" height="300"/></span>
+                <h1 class="md-typescale-display-large"><span style="color: #83d3e3;">Libre</span>Fit</h1>
+                <p class="md-typescale-body-large">
+                    A beatiful android app that allows you to 
+                    track your workout journey.
+                    Free, open-source, private by design.
+                </p>
+                <md-filled-button href="https://github.com/IamDg/LibreFit/releases/latest">Download</md-filled-button>
+                <md-outlined-button href="https://github.com/IamDg/LibreFit">Source code</md-outlined-button>
+            </header>
+            
+
+            <!--Main-->
+            <div class="surface">
+
+                <!-- Main content -->
+                <div class="content">
+
+                    <!-- Features -->
+                    <section>
+                        <header class="alt">
+                            <h2 class="md-typescale-headline-large">Features</h2>
+                        </header>
+                        
+                        <ul class="features">
+                            <li>
+                                <img src="images/free.svg" height="150" width="150">
+                                <h3 class="md-typescale-headline-medium">Free</h3>
+                                <p class="md-typescale-body-large">LibreFit is free and libre. No fees, no ads, no paywalls.</p>
+                            </li>
+                            <li>
+                                <img src="images/osi.svg" height="150" width="150">
+                                <h3 class="md-typescale-headline-medium">Open source</h3>
+                                <p class="md-typescale-body-large">The source code is open to the public, ensuring transparency for the project.</p>
+                            </li>
+                            <li>
+                                <img src="images/lock.svg" height="150" width="150">
+                                <h3 class="md-typescale-headline-medium">Private</h3>
+                                <p class="md-typescale-body-large">Your data is only yours. LibreFit can't even connect to the internet.</p>
+                            </li>
+                        </ul>
+                    </section>
+
+                    <hr>
+
+                    <!-- Motivation -->
+                    <section class="content">
+                        <header class="major">
+                            <h2 class="md-typescale-headline-large">Motivation</h2>
+                            <p class="md-typescale-body-large">
+                                In the modern age of digital data exploitation,
+                                your privacy has never been more critical, and
+                                yet many believe it is already a lost cause.
+                                It is not. Protecting your data helps prevent 
+                                unwanted access, identity theft, and 
+                                surveillance, ensuring that your online 
+                                activities remain confidential. Your privacy 
+                                is up for grabs, and you need to care about 
+                                it. Privacy is about power, and it is so 
+                                important that this power ends up in the right hands.
+                            </p>
+                        </header>                        
+                    </section>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
