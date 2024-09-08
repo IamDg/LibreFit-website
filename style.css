@@ -133,12 +133,9 @@ header {
     color: var(--md-sys-color-on-background); /* Text color */
 }
 
-.surface {
-    padding: 40px;
-}
 
 .content {
-    padding: 30px;
+    padding: 20px;
     border-radius: 20px;
     background-color: var(--md-sys-color-surface-container);
     color:  var(--md-sys-color-on-surface-container);
