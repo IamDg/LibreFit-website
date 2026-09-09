@@ -1,3 +1,4 @@
+import { Webhook, WebhookVerificationError } from "standardwebhooks";
 import { getDb, translators } from "../_db.js";
 import { signString } from '../_supporter-code-sign.js';
 import type { Env } from "../types.js";
@@ -8,23 +9,33 @@ import type { Env } from "../types.js";
  * Standard Webhooks specification:
  *   https://github.com/standard-webhooks/standard-webhooks
  *
- * Signed content: "{webhook-id}.{webhook-timestamp}.{rawBody}"
+ * Signed content: "{webhook-id}.{integer-seconds-timestamp}.{rawBody}"
+ *   (Weblate signs the floored integer seconds from its header
+ *   "webhook-timestamp: 1788990780.435625" — matching the official
+ *   libraries; the raw float header string is NOT part of the signature.)
  * Signature:      "v1," + base64(HMAC-SHA256(base64-decoded secret, content))
  * Headers:        webhook-id, webhook-timestamp, webhook-signature
+ *
+ * Verification is delegated to the official `standardwebhooks` library,
+ * which handles the tolerance window (±5 min), `whsec_` prefix stripping,
+ * signature-rotation lists, and timing-safe comparison.
  */
 
-/** Change actions that represent a creditable translation contribution. */
+/**
+ * Change actions that represent a creditable translation contribution.
+ * "Translation added" is the verbose name in current Weblate releases;
+ * "New translation" was used by older versions — both accepted for
+ * compatibility.
+ */
 const CREDITABLE_ACTIONS = new Set([
   "New translation",
+  "Translation added",
   "Translation changed",
   "Translation approved",
   "Suggestion added",
   "Suggestion accepted",
   "Comment added",
 ]);
-
-/** Replay window in seconds (Standard Webhooks recommendation: 5 minutes). */
-const TOLERANCE_SECONDS = 300;
 
 interface WeblateWebhookPayload {
   action?: string;
@@ -47,66 +58,6 @@ function isCreditableUsername(username: string | undefined): username is string 
   );
 }
 
-/**
- * Constant-time comparison of two strings (lengths may differ; differing
- * lengths never match, exactly like the official implementations).
- */
-function timingSafeEqual(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const aBytes = encoder.encode(a);
-  const bBytes = encoder.encode(b);
-  if (aBytes.length !== bBytes.length) return false;
-  let diff = 0;
-  for (let i = 0; i < aBytes.length; i++) {
-    diff |= aBytes[i] ^ bBytes[i];
-  }
-  return diff === 0;
-}
-
-/**
- * Verify the Standard Webhooks signature headers over the raw body bytes.
- */
-async function verifyStandardWebhook(
-  rawBody: string,
-  headers: Headers,
-  secret: string
-): Promise<boolean> {
-  const msgId = headers.get("webhook-id");
-  const msgTimestamp = headers.get("webhook-timestamp");
-  const msgSignature = headers.get("webhook-signature");
-
-  if (!msgId || !msgTimestamp || !msgSignature) return false;
-
-  // Replay protection: reject timestamps outside the tolerance window,
-  // in both directions (too old AND too new).
-  const timestamp = Number.parseFloat(msgTimestamp);
-  if (!Number.isFinite(timestamp)) return false;
-  const now = Date.now() / 1000;
-  if (Math.abs(now - timestamp) > TOLERANCE_SECONDS) return false;
-
-  // Strip the optional whsec_ prefix, then base64-decode the secret.
-  const cleanSecret = secret.startsWith("whsec_") ? secret.slice("whsec_".length) : secret;
-  const keyBytes = Uint8Array.from(atob(cleanSecret), (c) => c.charCodeAt(0));
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyBytes,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-
-  const signedContent = new TextEncoder().encode(`${msgId}.${msgTimestamp}.${rawBody}`);
-  const mac = await crypto.subtle.sign("HMAC", key, signedContent);
-  const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
-
-  // The signature header is a space-delimited list to support secret rotation.
-  return msgSignature
-    .split(" ")
-    .map((s) => s.trim())
-    .some((s) => s.startsWith("v1,") && timingSafeEqual(s.slice("v1,".length), expected));
-}
-
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const { WEBLATE_WEBHOOK_SECRET, PRIVATE_KEY } = env;
 
@@ -114,8 +65,30 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // raw body once and reuse the string for both verification and parsing.
   const rawBody = await request.text();
 
-  const isValid = await verifyStandardWebhook(rawBody, request.headers, WEBLATE_WEBHOOK_SECRET);
-  if (!isValid) return new Response("Invalid Signature", { status: 401 });
+  // The library expects a plain header record, not a Headers object.
+  const webhook = new Webhook(WEBLATE_WEBHOOK_SECRET);
+  try {
+    webhook.verify(
+      rawBody,
+      {
+        "webhook-id": request.headers.get("webhook-id") ?? "",
+        "webhook-timestamp": request.headers.get("webhook-timestamp") ?? "",
+        "webhook-signature": request.headers.get("webhook-signature") ?? "",
+      },
+      // Keep JSON parsing separate from verification so that a well-signed
+      // but malformed payload is still acknowledged (see below).
+      { jsonParse: false }
+    );
+  } catch (error) {
+    if (error instanceof WebhookVerificationError) {
+      // Visible in `wrangler pages deployment tail` for future debugging.
+      console.warn(`Weblate webhook rejected: ${error.message}`);
+      return new Response("Invalid Signature", { status: 401 });
+    }
+    // Anything else (e.g. misconfigured empty secret) is a server error:
+    // let it bubble to the logging middleware.
+    throw error;
+  }
 
   let payload: WeblateWebhookPayload;
   try {
